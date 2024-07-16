@@ -11,7 +11,7 @@ import AdminBro from 'admin-bro';
 import AdminBroExpress from '@admin-bro/express';
 import AdminBroMongoose from '@admin-bro/mongoose';
 import faceapi from 'face-api.js';
-  
+
 // Define __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,24 +82,8 @@ app.use(adminBro.options.rootPath, router);
 
 // Route to handle file uploads and user creation
 app.post('/api/upload', upload.array('images'), async (req, res) => {
-  const { employeeId, name, role, descriptors } = req.body;
+  const { employeeId, name, role } = req.body;
   const imagePaths = req.files.map(file => file.path);
-  if (descriptors) {
-    try {
-      const parsedDescriptors = JSON.parse(descriptors);
-      // Now you can use parsedDescriptors in your code
-    } catch (error) {
-      console.error('Error parsing descriptors:', error);
-      // Handle parsing error, e.g., return an error response
-      res.status(400).json({ error: 'Invalid JSON in descriptors' });
-      return;
-    }
-  } else {
-    // Handle case where descriptors is undefined or empty
-    console.error('Descriptors are undefined or empty');
-    res.status(400).json({ error: 'Descriptors are undefined or empty' });
-    return;
-  }
 
   try {
     const newUser = new User({
@@ -107,7 +91,7 @@ app.post('/api/upload', upload.array('images'), async (req, res) => {
       name,
       role,
       images: imagePaths,
-      descriptors: parsedDescriptors
+      descriptors: [] // Initialize descriptors array
     });
     await newUser.save();
 
