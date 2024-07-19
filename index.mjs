@@ -71,7 +71,26 @@ const upload = multer({ storage });
 AdminBro.registerAdapter(AdminBroMongoose);
 
 const adminBro = new AdminBro({
-  resources: [User, FaceLog],
+  resources: [
+    {
+      resource: User,
+      options: {
+        listProperties: ['name', 'role', 'images', 'descriptors'], // Customize fields for list view
+        showProperties: ['name', 'role', 'images', 'descriptors'], // Customize fields for show view
+        editProperties: ['name', 'role', 'images', 'descriptors'], // Customize fields for edit view
+        filterProperties: ['name', 'role'] // Optional: filter properties if needed
+      }
+    },
+    {
+      resource: FaceLog,
+      options: {
+        listProperties: ['name', 'timestamp', 'image', 'role', 'status', 'lateMinutes'], // Customize fields for list view
+        showProperties: ['name', 'timestamp', 'image', 'role', 'status', 'lateMinutes'], // Customize fields for show view
+        editProperties: ['name', 'timestamp', 'image', 'role', 'status', 'lateMinutes'], // Customize fields for edit view
+        filterProperties: ['name', 'role'] // Optional: filter properties if needed
+      }
+    }
+  ],
   rootPath: '/admin',
 });
 
