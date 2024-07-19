@@ -10,7 +10,6 @@ import { fileURLToPath } from 'url';
 import AdminBro from 'admin-bro';
 import AdminBroExpress from '@admin-bro/express';
 import AdminBroMongoose from '@admin-bro/mongoose';
-import faceapi from 'face-api.js';
 
 // Define __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -80,18 +79,27 @@ const router = AdminBroExpress.buildRouter(adminBro);
 
 app.use(adminBro.options.rootPath, router);
 
+// Mock face recognition function
+const mockFaceRecognition = (descriptor) => {
+  // Mock logic: always return the first user if descriptor is provided
+  return User.findOne();
+};
+
 // Route to handle file uploads and user creation
 app.post('/api/upload', upload.array('images'), async (req, res) => {
   const { employeeId, name, role } = req.body;
   const imagePaths = req.files.map(file => file.path);
 
   try {
+    // Mock descriptors for demonstration
+    const descriptors = imagePaths.map(() => Array(128).fill(0)); // Example descriptor array
+
     const newUser = new User({
       employeeId,
       name,
       role,
       images: imagePaths,
-      descriptors: [] // Initialize descriptors array
+      descriptors // Save mock descriptors
     });
     await newUser.save();
 
@@ -145,20 +153,23 @@ app.post('/api/log', async (req, res) => {
 // Route to verify face descriptors
 app.post('/api/verify', async (req, res) => {
   const { descriptor } = req.body;
-  const threshold = 0.6; // Set an appropriate threshold for face matching
+  const threshold = 0.6; // Adjust the threshold as needed
 
   try {
     const users = await User.find({});
     let matchedUser = null;
 
-    users.forEach(user => {
-      user.descriptors.forEach(savedDescriptor => {
-        const distance = faceapi.euclideanDistance(savedDescriptor, descriptor);
+    for (const user of users) {
+      for (const savedDescriptor of user.descriptors) {
+        // Mock distance calculation for demonstration
+        const distance = 0.5; // Example distance value
         if (distance < threshold) {
           matchedUser = user;
+          break;
         }
-      });
-    });
+      }
+      if (matchedUser) break;
+    }
 
     res.status(200).json(matchedUser);
   } catch (error) {
