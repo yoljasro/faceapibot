@@ -49,7 +49,8 @@ const faceLogSchema = new mongoose.Schema({
   role: String,
   image: String,
   timestamp: Date,
-  lateMinutes: Number,
+  lateMinutes: String, // Changed to String for formatted output
+  earlyLeavingMinutes: String, // Added to log early leaving minutes
   status: String
 });
 
@@ -75,21 +76,24 @@ const adminBro = new AdminBro({
     {
       resource: User,
       options: {
-        listProperties: ['name', 'role', 'images', 'descriptors'], // Customize fields for list view
-        showProperties: ['name', 'role', 'images', 'descriptors'], // Customize fields for show view
-        editProperties: ['name', 'role', 'images', 'descriptors'], // Customize fields for edit view
-        filterProperties: ['name', 'role'] // Optional: filter properties if needed
-      }
+        listProperties: ['name', 'role', 'images'],
+        showProperties: ['name', 'role', 'images'],
+        editProperties: ['name', 'role', 'images'],
+        filterProperties: ['name', 'role'],
+        properties: {
+          images: {}
+        },
+      },
     },
     {
       resource: FaceLog,
       options: {
-        listProperties: ['name', 'timestamp', 'image', 'role', 'status', 'lateMinutes'], // Customize fields for list view
-        showProperties: ['name', 'timestamp', 'image', 'role', 'status', 'lateMinutes'], // Customize fields for show view
-        editProperties: ['name', 'timestamp', 'image', 'role', 'status', 'lateMinutes'], // Customize fields for edit view
-        filterProperties: ['name', 'role'] // Optional: filter properties if needed
+        listProperties: ['name', 'timestamp', 'role', 'status', 'lateMinutes', 'earlyLeavingMinutes'],
+        showProperties: ['name', 'timestamp', 'image', 'role', 'status', 'lateMinutes', 'earlyLeavingMinutes'],
+        editProperties: ['name', 'timestamp', 'image', 'role', 'status', 'lateMinutes', 'earlyLeavingMinutes'],
+        filterProperties: ['name', 'role']
       }
-    }
+    },
   ],
   rootPath: '/admin',
 });
@@ -97,12 +101,6 @@ const adminBro = new AdminBro({
 const router = AdminBroExpress.buildRouter(adminBro);
 
 app.use(adminBro.options.rootPath, router);
-
-// Mock face recognition function
-const mockFaceRecognition = (descriptor) => {
-  // Mock logic: always return the first user if descriptor is provided
-  return User.findOne();
-};
 
 // Route to handle file uploads and user creation
 app.post('/api/upload', upload.array('images'), async (req, res) => {
@@ -131,16 +129,60 @@ app.post('/api/upload', upload.array('images'), async (req, res) => {
 
 // Route to handle face log creation and send data to Telegram
 app.post('/api/log', async (req, res) => {
-  const { employeeId, name, role, image, timestamp, lateMinutes, status } = req.body;
+  const { employeeId, name, role, image, timestamp, status } = req.body;
+
+  // Define work start and end times
+  const workStartTimes = {
+    chef: '10:30:00',
+    waiter: '11:30:00',
+  };
+  const workEndTime = '20:00:00'; // 8:00 PM
 
   try {
+    // Find the user
+    const user = await User.findOne({ employeeId });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get the work start time for the role
+    const workStartTime = moment.tz(`${moment(timestamp).format('YYYY-MM-DD')} ${workStartTimes[role]}`, 'Asia/Tashkent');
+    const checkTime = moment.tz(timestamp, 'Asia/Tashkent');
+
+    // Calculate late minutes
+    let lateMinutes = 0;
+    if (checkTime.isAfter(workStartTime)) {
+      lateMinutes = checkTime.diff(workStartTime, 'minutes');
+    }
+
+    // Convert late minutes to HH:mm format
+    const lateHours = Math.floor(lateMinutes / 60);
+    const lateMinutesFormatted = lateMinutes % 60;
+    const lateTimeFormatted = `${String(lateHours).padStart(2, '0')}:${String(lateMinutesFormatted).padStart(2, '0')}`;
+
+    // Calculate early leaving minutes
+    const currentTime = moment.tz('Asia/Tashkent');
+    const workEndTimeMoment = moment.tz(`${moment(currentTime).format('YYYY-MM-DD')} ${workEndTime}`, 'Asia/Tashkent');
+    let earlyLeavingMinutes = 0;
+    if (currentTime.isBefore(workEndTimeMoment)) {
+      earlyLeavingMinutes = workEndTimeMoment.diff(currentTime, 'minutes');
+    }
+
+    // Convert early leaving minutes to HH:mm format
+    const earlyLeavingHours = Math.floor(earlyLeavingMinutes / 60);
+    const earlyLeavingMinutesFormatted = earlyLeavingMinutes % 60;
+    const earlyLeavingTimeFormatted = `${String(earlyLeavingHours).padStart(2, '0')}:${String(earlyLeavingMinutesFormatted).padStart(2, '0')}`;
+
+    // Create and save the face log entry
     const faceLog = new FaceLog({
       employeeId,
       name,
       role,
       image,
       timestamp,
-      lateMinutes,
+      lateMinutes: lateTimeFormatted, // Save formatted late minutes
+      earlyLeavingMinutes: earlyLeavingTimeFormatted, // Save formatted early leaving minutes
       status
     });
     await faceLog.save();
@@ -152,7 +194,8 @@ app.post('/api/log', async (req, res) => {
       <b>Name:</b> ${name}
       <b>Role:</b> ${role}
       <b>Status:</b> ${status}
-      <b>Late Minutes:</b> ${lateMinutes}
+      <b>Late Minutes:</b> ${lateTimeFormatted}
+      <b>Early Leaving Minutes:</b> ${earlyLeavingTimeFormatted}
       <b>Time:</b> ${moment(timestamp).tz('Asia/Tashkent').format('YYYY-MM-DD HH:mm:ss')}
       <b>Image:</b> ${image}
     `;
